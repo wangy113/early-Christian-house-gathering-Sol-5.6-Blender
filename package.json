@@ -4,23 +4,26 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run prepare:public && vite",
+    "prepare:public": "node scripts/prepare-public.mjs",
+    "validate:content": "node scripts/validate-content.mjs",
+    "build": "npm run validate:content && npm run prepare:public && vite build && node scripts/check-dist.mjs",
+    "test": "node --test tests/notebook.test.js tests/content.test.js",
+    "test:e2e": "playwright test",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.9",
-    "@react-three/fiber": "^9.8.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "three": "^0.186.1"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "sharp": "0.34.5",
     "vite": "^8.3.0"
   }
 }

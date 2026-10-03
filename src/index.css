@@ -1,8 +1,26 @@
 :root {
-  font-family: Inter, system-ui, sans-serif;
-  color: #f3eee4;
-  background: #10100f;
+  --bg: #16140f;
+  --panel: #211e18;
+  --panel-2: #2a261f;
+  --line: #5a5143;
+  --text: #f3eee4;
+  --muted: #cfc5b4;
+  --accent: #e8bc68;
+  --link: #ffd58a;
+  --focus: #ffd27a;
+  --fiction: #f0b9a0;
+  --source: #a9d3c4;
+  --interp: #c9c1f2;
+  --recon: #e8bc68;
+  --error: #ffb4a8;
+  --error-bg: #3a1d18;
+  --warn-bg: #352a14;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -12,19 +30,33 @@
 html,
 body,
 #root {
-  min-width: 320px;
-  min-height: 100%;
   margin: 0;
+  min-height: 100%;
 }
 
 body {
   min-height: 100svh;
-}
-
-button {
-  touch-action: manipulation;
+  background: var(--bg);
 }
 
 img {
   max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
 }
