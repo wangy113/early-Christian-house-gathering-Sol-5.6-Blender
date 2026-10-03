@@ -1,5 +1,7 @@
 # At the Threshold — experience content specification
 
+> **Superseded in part (2026-10-03).** The instructor later removed all text boxes and added hotspots, lens voices, outside-the-frame questions, case rulings, and sorting. See [experience-picture-led.md](experience-picture-led.md). The images, IDs, situations, choices, responses, sources, and image limitations below still apply. The observation fields, reconsideration prompts, optional notes, and opening/closing text fields do not.
+
 This is authored content for the experience described in [the architecture](experience-architecture.md). It contains no essay assignment, grading rubric, Canvas submission requirements, or required word counts. [The coding-agent handoff](coding-agent-handoff.md) explains how to use both documents.
 
 The wording below is implementation-ready draft copy. Correct obvious copy issues while preserving the distinctions between observed image details, historical testimony, and fictional situations. A specialist/instructor's content review is still needed before treating this as a validated classroom resource.

@@ -1,30 +1,30 @@
-// Versioned notebook envelope (architecture §7–8).
-// Every load and import passes through parseEnvelope, which builds a new
-// whitelisted object instead of trusting arbitrary keys.
+// Versioned envelope for what a learner explored, decided and sorted.
+// Version 2 holds no free text: learners type nothing. Every load and import
+// passes through parseEnvelope, which builds a new whitelisted object.
 
 import { experience } from '../content/experience.js'
 import { encounters } from '../content/encounters.js'
 import { sources } from '../content/sources.js'
 
-export const SCHEMA_VERSION = 1
-export const MAX_FIELD_LENGTH = 20000
+export const SCHEMA_VERSION = 2
 export const MAX_IMPORT_BYTES = 1024 * 1024
 export const UNSURE = 'unsure'
-
-export const ENTRY_TEXT_FIELDS = ['observation', 'assumption', 'reason', 'currentThinking', 'note']
+export const SORT_PLACES = ['picture', 'source', 'unestablished']
+export const VERDICT_IDS = ['supported', 'partly', 'unestablished']
 
 export function freshEntry() {
   return {
     visited: false,
-    observation: '',
-    assumption: '',
+    hotspotsOpened: [],
+    outsideOpened: [],
     choiceId: null,
-    reason: '',
     firstSnapshot: null,
     perspectivesRevealed: false,
     revisedChoiceId: null,
-    currentThinking: '',
-    note: '',
+    verdictId: null,
+    verdictRevealed: false,
+    sorts: {},
+    sortRevealed: false,
     sourceIdsOpened: [],
   }
 }
@@ -35,8 +35,6 @@ export function freshEnvelope(now = null) {
     experienceId: experience.id,
     contentVersion: experience.contentVersion,
     updatedAt: now,
-    openingThought: '',
-    closingThought: '',
     preferences: { descriptionsOnly: false },
     entries: Object.fromEntries(experience.order.map((id) => [id, freshEntry()])),
   }
@@ -44,20 +42,15 @@ export function freshEnvelope(now = null) {
 
 export const isChoiceFor = (encounterId, choiceId) =>
   Boolean(encounters[encounterId]?.choices.some((choice) => choice.id === choiceId))
-
-export const isRevisedChoiceFor = (encounterId, choiceId) =>
-  choiceId === UNSURE || isChoiceFor(encounterId, choiceId)
+export const isRevisedChoiceFor = (encounterId, choiceId) => choiceId === UNSURE || isChoiceFor(encounterId, choiceId)
+export const isHotspotFor = (encounterId, hotspotId) =>
+  Boolean(encounters[encounterId]?.hotspots.some((spot) => spot.id === hotspotId))
+export const isFrameQuestionFor = (encounterId, frameId) =>
+  Boolean(encounters[encounterId]?.outsideFrame.some((entry) => entry.id === frameId))
+export const isSortStatementFor = (encounterId, statementId) =>
+  Boolean(encounters[encounterId]?.sort.some((statement) => statement.id === statementId))
 
 class InvalidEnvelope extends Error {}
-
-function text(value, where) {
-  if (value === undefined) return ''
-  if (typeof value !== 'string') throw new InvalidEnvelope(`${where} must be text`)
-  if (value.length > MAX_FIELD_LENGTH) {
-    throw new InvalidEnvelope(`${where} is longer than ${MAX_FIELD_LENGTH.toLocaleString('en-US')} characters`)
-  }
-  return value
-}
 
 function bool(value, where) {
   if (value === undefined) return false
@@ -71,11 +64,17 @@ function nullableTimestamp(value, where) {
   return value
 }
 
-function choice(value, encounterId, where, allowUnsure = false) {
+function member(value, valid, where) {
   if (value === undefined || value === null) return null
-  const valid = allowUnsure ? isRevisedChoiceFor(encounterId, value) : isChoiceFor(encounterId, value)
-  if (!valid) throw new InvalidEnvelope(`${where} is not a known choice`)
+  if (!valid(value)) throw new InvalidEnvelope(`${where} is not a known option`)
   return value
+}
+
+function idList(value, valid, where) {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new InvalidEnvelope(`${where} must be a list`)
+  for (const item of value) if (!valid(item)) throw new InvalidEnvelope(`${where} lists an unknown item`)
+  return [...new Set(value)]
 }
 
 function parseEntry(raw, id) {
@@ -85,26 +84,28 @@ function parseEntry(raw, id) {
   const entry = freshEntry()
   entry.visited = bool(raw.visited, `${where}.visited`)
   entry.perspectivesRevealed = bool(raw.perspectivesRevealed, `${where}.perspectivesRevealed`)
-  for (const field of ENTRY_TEXT_FIELDS) entry[field] = text(raw[field], `${where}.${field}`)
-  entry.choiceId = choice(raw.choiceId, id, `${where}.choiceId`)
-  entry.revisedChoiceId = choice(raw.revisedChoiceId, id, `${where}.revisedChoiceId`, true)
+  entry.verdictRevealed = bool(raw.verdictRevealed, `${where}.verdictRevealed`)
+  entry.sortRevealed = bool(raw.sortRevealed, `${where}.sortRevealed`)
+  entry.hotspotsOpened = idList(raw.hotspotsOpened, (h) => isHotspotFor(id, h), `${where}.hotspotsOpened`)
+  entry.outsideOpened = idList(raw.outsideOpened, (f) => isFrameQuestionFor(id, f), `${where}.outsideOpened`)
+  entry.sourceIdsOpened = idList(raw.sourceIdsOpened, (s) => Boolean(sources[s]), `${where}.sourceIdsOpened`)
+  entry.choiceId = member(raw.choiceId, (c) => isChoiceFor(id, c), `${where}.choiceId`)
+  entry.revisedChoiceId = member(raw.revisedChoiceId, (c) => isRevisedChoiceFor(id, c), `${where}.revisedChoiceId`)
+  entry.verdictId = member(raw.verdictId, (v) => VERDICT_IDS.includes(v), `${where}.verdictId`)
 
-  if (raw.sourceIdsOpened !== undefined) {
-    if (!Array.isArray(raw.sourceIdsOpened)) throw new InvalidEnvelope(`${where}.sourceIdsOpened must be a list`)
-    for (const sourceId of raw.sourceIdsOpened) {
-      if (!sources[sourceId]) throw new InvalidEnvelope(`${where} lists unknown source "${sourceId}"`)
+  if (raw.sorts !== undefined) {
+    if (!raw.sorts || typeof raw.sorts !== 'object' || Array.isArray(raw.sorts)) throw new InvalidEnvelope(`${where}.sorts must be an object`)
+    for (const [statementId, place] of Object.entries(raw.sorts)) {
+      if (!isSortStatementFor(id, statementId) || !SORT_PLACES.includes(place)) throw new InvalidEnvelope(`${where}.sorts has an unknown item`)
+      entry.sorts[statementId] = place
     }
-    entry.sourceIdsOpened = [...new Set(raw.sourceIdsOpened)]
   }
 
   if (raw.firstSnapshot !== undefined && raw.firstSnapshot !== null) {
     const snap = raw.firstSnapshot
     if (typeof snap !== 'object' || Array.isArray(snap)) throw new InvalidEnvelope(`${where}.firstSnapshot must be an object`)
     entry.firstSnapshot = {
-      observation: text(snap.observation, `${where}.firstSnapshot.observation`),
-      assumption: text(snap.assumption, `${where}.firstSnapshot.assumption`),
-      choiceId: choice(snap.choiceId, id, `${where}.firstSnapshot.choiceId`),
-      reason: text(snap.reason, `${where}.firstSnapshot.reason`),
+      choiceId: member(snap.choiceId, (c) => isChoiceFor(id, c), `${where}.firstSnapshot.choiceId`),
       capturedAt: nullableTimestamp(snap.capturedAt, `${where}.firstSnapshot.capturedAt`),
     }
   }
@@ -114,34 +115,31 @@ function parseEntry(raw, id) {
 /**
  * Validate an already-parsed value.
  * Returns { ok: true, state } or { ok: false, code, message }.
- * code: 'not-envelope' | 'other-experience' | 'unsupported-version' | 'incompatible-content' | 'invalid'
  */
 export function parseEnvelope(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, code: 'not-envelope', message: 'This is not a notebook from this experience.' }
+    return { ok: false, code: 'not-envelope', message: 'This is not saved work from this experience.' }
   }
   if (raw.experienceId !== experience.id) {
-    return { ok: false, code: 'other-experience', message: 'This notebook belongs to a different activity.' }
+    return { ok: false, code: 'other-experience', message: 'This file belongs to a different activity.' }
   }
   if (raw.schemaVersion !== SCHEMA_VERSION) {
     return {
       ok: false,
       code: 'unsupported-version',
-      message: `This notebook uses format version ${String(raw.schemaVersion)}, which this version of the experience cannot read.`,
+      message: `This saved work uses format version ${String(raw.schemaVersion)}, which this version of the experience cannot read.`,
     }
   }
   if (raw.contentVersion !== experience.contentVersion) {
     return {
       ok: false,
       code: 'incompatible-content',
-      message: `This notebook was written for content version ${String(raw.contentVersion)}; this page uses ${experience.contentVersion}.`,
+      message: `This saved work was made for content version ${String(raw.contentVersion)}; this page uses ${experience.contentVersion}.`,
     }
   }
   try {
     const state = freshEnvelope()
     state.updatedAt = nullableTimestamp(raw.updatedAt, 'updatedAt')
-    state.openingThought = text(raw.openingThought, 'openingThought')
-    state.closingThought = text(raw.closingThought, 'closingThought')
     if (raw.preferences !== undefined) {
       if (!raw.preferences || typeof raw.preferences !== 'object') throw new InvalidEnvelope('preferences must be an object')
       state.preferences.descriptionsOnly = bool(raw.preferences.descriptionsOnly, 'preferences.descriptionsOnly')
@@ -150,43 +148,37 @@ export function parseEnvelope(raw) {
       throw new InvalidEnvelope('entries must be an object')
     }
     const rawEntries = raw.entries ?? {}
-    for (const key of Object.keys(rawEntries)) {
-      if (!experience.order.includes(key)) throw new InvalidEnvelope(`unknown encounter "${key}"`)
-    }
+    for (const key of Object.keys(rawEntries)) if (!experience.order.includes(key)) throw new InvalidEnvelope(`unknown encounter "${key}"`)
     for (const id of experience.order) state.entries[id] = parseEntry(rawEntries[id], id)
     return { ok: true, state }
   } catch (error) {
-    if (error instanceof InvalidEnvelope) return { ok: false, code: 'invalid', message: `The notebook could not be read: ${error.message}.` }
+    if (error instanceof InvalidEnvelope) return { ok: false, code: 'invalid', message: `The saved work could not be read: ${error.message}.` }
     throw error
   }
 }
 
 /** Parse JSON text (from storage or an imported file). */
 export function parseEnvelopeText(textValue) {
-  if (typeof textValue !== 'string') return { ok: false, code: 'not-envelope', message: 'No notebook data was found.' }
+  if (typeof textValue !== 'string') return { ok: false, code: 'not-envelope', message: 'No saved work was found.' }
   let raw
   try {
     raw = JSON.parse(textValue)
   } catch {
-    return { ok: false, code: 'malformed', message: 'The notebook data is not valid JSON.' }
+    return { ok: false, code: 'malformed', message: 'The saved data is not valid JSON.' }
   }
   return parseEnvelope(raw)
 }
 
-const hasText = (value) => typeof value === 'string' && value.trim().length > 0
+export const entrySorted = (entry) => Object.keys(entry.sorts).length > 0
 
-export function entryHasNotes(entry) {
-  return ENTRY_TEXT_FIELDS.some((field) => hasText(entry[field]))
-}
-
-/** Derived progress: never persisted, never a score (architecture §7). */
+/** Derived progress: never persisted, never a score. */
 export function progress(state) {
   let visitedCount = 0
-  let notesCount = 0
+  let sortedCount = 0
   for (const id of experience.order) {
     const entry = state.entries[id]
     if (entry?.visited) visitedCount += 1
-    if (entry && entryHasNotes(entry)) notesCount += 1
+    if (entry?.sortRevealed) sortedCount += 1
   }
-  return { visitedCount, notesCount, total: experience.order.length }
+  return { visitedCount, sortedCount, total: experience.order.length }
 }

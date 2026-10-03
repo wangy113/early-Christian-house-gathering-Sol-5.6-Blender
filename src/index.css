@@ -1,25 +1,34 @@
+/* Groovy style (chrismccoy/claude-design-styles, spec/groovy.md):
+   warm 70s palette, Righteous display + DM Sans body, chunky outlines,
+   hard offset shadows, wavy section bands. Single light theme by design. */
 :root {
-  --bg: #16140f;
-  --panel: #211e18;
-  --panel-2: #2a261f;
-  --line: #5a5143;
-  --text: #f3eee4;
-  --muted: #cfc5b4;
-  --accent: #e8bc68;
-  --link: #ffd58a;
-  --focus: #ffd27a;
-  --fiction: #f0b9a0;
-  --source: #a9d3c4;
-  --interp: #c9c1f2;
-  --recon: #e8bc68;
-  --error: #ffb4a8;
-  --error-bg: #3a1d18;
-  --warn-bg: #352a14;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.55;
-  color: var(--text);
-  background: var(--bg);
+  --cream: #fdf6e3;
+  --orange: #e8621a;
+  --mustard: #d4a017;
+  --avocado: #6b7c35;
+  --brown: #8b4513;
+  --rust: #b7410e;
+  --ink: #2d1b00;
+  --white: #ffffff;
+  --tint-orange: #fff3e0;
+  --tint-mustard: #fffde7;
+  --tint-green: #f1f8e9;
+  --tint-orange-strong: #fbd9bf;
+  --tint-green-strong: #dfe8c6;
+  --font-display: 'Righteous', 'Baloo 2', 'Trebuchet MS', sans-serif;
+  --font-body: 'DM Sans', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --line: 3px solid var(--ink);
+  --shadow: 6px 6px 0 var(--ink);
+  --shadow-sm: 4px 4px 0 var(--ink);
+  --radius-card: 40px 20px 40px 20px;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--cream);
+  color-scheme: light;
   font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -36,7 +45,12 @@ body,
 
 body {
   min-height: 100svh;
-  background: var(--bg);
+  overflow-x: hidden;
+  background-color: var(--cream);
+  background-image:
+    radial-gradient(circle at 92% 6%, #e8621a22 0, transparent 22rem),
+    radial-gradient(circle at 4% 40%, #d4a01722 0, transparent 18rem);
+  background-repeat: no-repeat;
 }
 
 img {
@@ -49,6 +63,10 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

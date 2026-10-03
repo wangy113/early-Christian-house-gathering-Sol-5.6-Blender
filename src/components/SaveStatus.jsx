@@ -4,7 +4,7 @@ import { downloadText, fileStamp } from '../lib/notebookExport.js'
 import { ExportActions } from './ExportActions.jsx'
 
 const labels = {
-  idle: 'No notes saved yet',
+  idle: 'Nothing saved yet',
   pending: 'Changes pending',
   saved: 'Saved on this browser',
   failed: 'Not saved on this browser',
@@ -16,10 +16,10 @@ export function SaveStatus({ status }) {
 }
 
 const failureText = {
-  unavailable: 'This browser is not letting the page save notes.',
-  denied: 'This browser refused to save your notes.',
-  full: 'Browser storage is full, so your latest notes could not be saved.',
-  reset: 'Your saved notes could not be removed, so nothing was reset. Your notes are unchanged.',
+  unavailable: 'This browser is not letting the page save your work.',
+  denied: 'This browser refused to save your work.',
+  full: 'Browser storage is full, so your latest changes could not be saved.',
+  reset: 'Your saved work could not be removed, so nothing was reset. Your work is unchanged.',
 }
 
 /** Visible, announced storage problems with immediate ways to keep the text. */
@@ -30,7 +30,7 @@ export function StorageNotices({ notebook }) {
   if (recovery) {
     return (
       <section className={'notice is-warning'} role={'alert'} aria-labelledby={'recovery-heading'}>
-        <h2 id={'recovery-heading'}>Saved notes could not be opened</h2>
+        <h2 id={'recovery-heading'}>Saved work could not be opened</h2>
         <p>{recovery.message} The stored data has not been changed or deleted. Saving is paused so it cannot be overwritten.</p>
         <div className={'button-row'}>
           <button type={'button'} onClick={() => downloadText(`at-the-threshold-stored-data-${fileStamp()}.json`, recovery.raw ?? '', 'application/json')}>
@@ -40,7 +40,7 @@ export function StorageNotices({ notebook }) {
         </div>
         {confirmFresh ? (
           <div className={'confirm-panel'}>
-            <p>Beginning fresh will replace the stored data on this browser the next time your notes are saved. Download it first if you may need it.</p>
+            <p>Beginning fresh will replace the stored data on this browser the next time your work is saved. Download it first if you may need it.</p>
             <div className={'button-row'}>
               <button type={'button'} onClick={beginFresh}>Begin fresh and replace stored data</button>
               <button type={'button'} onClick={() => setConfirmFresh(false)}>Cancel</button>
@@ -54,10 +54,10 @@ export function StorageNotices({ notebook }) {
   if (conflict) {
     return (
       <section className={'notice is-warning'} role={'alert'} aria-labelledby={'conflict-heading'}>
-        <h2 id={'conflict-heading'}>Your notes changed in another tab</h2>
+        <h2 id={'conflict-heading'}>Your work changed in another tab</h2>
         <p>
-          Saving in this tab is paused so neither version is silently overwritten. Download this tab's notes first if you want
-          to keep them, then choose which version to continue with. Using one tab at a time avoids this.
+          Saving in this tab is paused so neither version is silently overwritten. Download this tab's version first if you want
+          to keep it, then choose which version to continue with. Using one tab at a time avoids this.
         </p>
         <ExportActions state={state} compact />
         <div className={'button-row'}>
@@ -73,9 +73,9 @@ export function StorageNotices({ notebook }) {
       <section className={'notice is-error'} role={'alert'} aria-labelledby={'failure-heading'}>
         <h2 id={'failure-heading'}>Not saved on this browser</h2>
         <p>
-          {failureText[status.reason] ?? failureText.denied} Your text is still on this page, but reloading or closing it
-          can lose anything not saved. Copy or download your notes now, or use the{' '}
-          <a href={assetUrl('experience-packet.html')}>offline experience</a> and keep notes in your own document.
+          {failureText[status.reason] ?? failureText.denied} Your work is still on this page, but reloading or closing it
+          can lose anything not saved. Copy or download your reconstruction now, or use the{' '}
+          <a href={assetUrl('experience-packet.html')}>offline experience</a>.
         </p>
         <ExportActions state={state} compact />
       </section>

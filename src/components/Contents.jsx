@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { experience } from '../content/experience.js'
 import { encounters } from '../content/encounters.js'
-import { entryHasNotes } from '../state/notebookSchema.js'
 import { encounterHash } from '../lib/routes.js'
 
 const wide = () => typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 60rem)').matches
@@ -17,7 +16,7 @@ export function Contents({ route, state }) {
           <li><a href={'#/start'} aria-current={current('#/start')}>Start</a></li>
           {experience.order.map((id) => {
             const entry = state.entries[id]
-            const status = [entry.visited ? 'visited' : null, entryHasNotes(entry) ? 'notes' : null].filter(Boolean).join(' · ')
+            const status = [entry.visited ? 'visited' : null, entry.sortRevealed ? 'sorted' : null].filter(Boolean).join(' · ')
             return (
               <li key={id}>
                 <a href={encounterHash(id)} aria-current={current(encounterHash(id))}>
@@ -30,7 +29,7 @@ export function Contents({ route, state }) {
               </li>
             )
           })}
-          <li><a href={'#/notebook'} aria-current={current('#/notebook')}>My notes</a></li>
+          <li><a href={'#/notebook'} aria-current={current('#/notebook')}>My reconstruction</a></li>
           <li><a href={'#/closing'} aria-current={current('#/closing')}>Look back</a></li>
         </ol>
       </details>

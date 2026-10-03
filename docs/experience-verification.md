@@ -6,6 +6,95 @@
 
 This file records only checks that were actually run. Items marked **unverified** were not performed.
 
+## Version 2: picture-led, no text boxes, Groovy style (current)
+
+The design changes are recorded in [experience-picture-led.md](experience-picture-led.md). The version 1 record further down still describes the checks that carry over unchanged, such as storage, routing, and the subpath.
+
+### Checks run for version 2
+
+| Command | Result |
+|---|---|
+| `npm run lint` | Passed: 0 warnings, 0 errors. |
+| `npm test` | **21 passed, 0 failed.** Covers: <ul><li>reducer rules for hotspots, outside-frame questions, sources, the first choice (captured once), verdicts, and sorting</li><li>the reconstruction board</li><li>storage: empty, loaded, malformed, `null`, old v1 notes, future, other-experience, denied, and quota cases</li><li>reset that removes only its own key</li><li>the schema whitelist</li><li>JSON roundtrip and import limits</li><li>export content with no scoring language</li><li>content manifest, lens voices, and four frame questions per picture</li><li>a check that no writing prompts remain</li><li>validator failure cases</li></ul> |
+| `npm run build` | Passed. `check-dist` asserts that the packet contains every choice response, hotspot text, context, lens voice, outside-frame answer, ruling explanation, and sort explanation. Also that no model, video, panorama, or Blender files are deployed. |
+| `npm run test:e2e` | **23 passed, 0 failed** (Chromium, production preview). |
+
+The browser journeys run with Google Fonts requests blocked, so they don't depend on the network. They cover:
+
+- **No text boxes:** zero `textarea` or text inputs on all 9 routes.
+- **Exploring a picture:**
+  - Hotspots open by marker and by list, and the right panel and source tag appear.
+  - Each lens changes the voice and shows the fictional-perspective label and note.
+  - The explored state is saved.
+  - Outside the frame moves focus to its first question, and the answer appears with its tag.
+- **Meal journey:** decide → response → "Your view now" → ruling → sort → historian's placement.
+  - After a reload, the first choice, current choice, ruling, and sorts are all preserved.
+  - The closing board puts statements in the learner's columns, with the historian's note.
+  - The downloaded reconstruction contains the board and the decisions.
+- **Other decision paths:**
+  - Neutral feedback when no choice is made.
+  - Recall shows the earlier decision or links back to it.
+  - E6 caption support is explained without a score.
+- **Storage problems:**
+  - Blocked storage warns and still exports.
+  - Full storage reports itself.
+  - Old v1 notes and malformed data are never overwritten, and v1 data can be downloaded first.
+  - Backup import is validated; cancel and restore both work.
+  - Reset can be cancelled, and confirmed reset leaves the legacy key alone.
+  - A change in a second tab pauses saving.
+- **Other routes and states:**
+  - An invalid route is recoverable.
+  - Descriptions only makes 0 image requests, and details and frame questions still work.
+  - Blocked images leave a description and working controls.
+- **Keyboard:**
+  - A marker opens with Enter, and the lens works.
+  - The image dialog closes with Escape and returns focus to its button.
+  - Radio arrows, Tab to the response button, and focus on the heading after navigation all work.
+- **Small screens:** no horizontal scroll at 320 px, including with the frame open.
+- **Offline and hosting:**
+  - The packet over `file://` makes 0 network requests and contains the details, frame questions, responses, and sort answers.
+  - No-JS visitors get a working packet link.
+  - Hosting under the project subpath works with 0 failed responses.
+
+### Visual checks (screenshots, Chromium, 1366 px)
+
+- The start page and the meal page were inspected with the real Righteous and DM Sans fonts. For screenshots only, the font files were served through curl, because the sandbox's headless browser rejects the proxy certificate for Google Fonts.
+- All six pictures were checked with their markers overlaid. Eight markers that covered faces or hid their object were moved and then rechecked:
+  - E1 woman
+  - E2 older woman and courtyard
+  - E3 reader and both listeners
+  - E4 woman in purple
+  - E6 statue
+
+### Performance (version 2)
+
+- First picture (`#/encounter/letter`), localhost, cold, fonts blocked: 5 requests, **480.2 KiB** uncompressed.
+- Google Fonts, measured separately with curl (Latin subsets): about **104 KiB**:
+  - Righteous: 12.8 KiB
+  - DM Sans variable: 62.7 KiB
+  - DM Sans italic: 28.5 KiB, loaded only if italic text appears
+- Total is about 590 KiB, under the 1.5 MiB budget. Throttled-mobile timing is still **unverified**.
+
+### Still unverified for version 2
+
+- Screen-reader pass.
+- Measured contrast audit. Contrast was reasoned from the palette values, not measured:
+  - ink on cream, mustard, or orange fills: dark-on-light, comfortably above 4.5:1
+  - white on rust buttons: about 5.6:1
+  - orange is used only for large display text and for fills behind dark text
+- Real-device and 200% zoom checks.
+- GitHub Actions run and live deployment.
+- Instructor/specialist review of the new hotspot, voice, frame, ruling, and sort copy (see the review list in experience-picture-led.md).
+- A learner pilot.
+
+### Known limitation found while testing
+
+Saving is cautious across tabs. If a learner opens a picture in a second tab before the first tab has saved, the second tab records the visit. The first tab then pauses saving and asks which version to keep. Nothing is lost, but it can surprise someone who opens several tabs at once. The notice already advises using one tab. The browser test now waits for the first tab's save, so it checks the intended conflict path reliably (10/10 repeated runs).
+
+---
+
+## Version 1 record (text-box design, superseded)
+
 ## Environment
 
 - Linux container, with Node 22.22.0 and npm 10.9.4.

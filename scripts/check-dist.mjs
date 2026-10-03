@@ -47,12 +47,17 @@ for (const match of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
 
 const packet = await readFile(join(dist, 'experience-packet.html'), 'utf8')
 if (/<script|<img|<link[^>]+stylesheet|src="http/i.test(packet)) problems.push('packet must be self-contained (no scripts, images or external styles)')
+const packetEsc = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 for (const id of experience.order) {
-  for (const choice of encounters[id].choices) {
-    if (!packet.includes(choice.feedback.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))) {
-      problems.push(`packet is missing feedback for ${id}/${choice.id}`)
-    }
-  }
+  const item = encounters[id]
+  const required = [
+    ...item.choices.map((choice) => [`feedback ${choice.id}`, choice.feedback]),
+    ...item.hotspots.flatMap((spot) => [[`hotspot ${spot.id}`, spot.see], [`hotspot context ${spot.id}`, spot.context.text], ...Object.entries(spot.voices).map(([lens, voice]) => [`voice ${spot.id}/${lens}`, voice])]),
+    ...item.outsideFrame.map((entry) => [`outside-frame ${entry.id}`, entry.answer]),
+    ...item.verdicts.map((verdict) => [`verdict ${verdict.id}`, verdict.why]),
+    ...item.sort.map((statement) => [`sort ${statement.id}`, statement.why]),
+  ]
+  for (const [what, text] of required) if (!packet.includes(packetEsc(text))) problems.push(`packet is missing ${id} ${what}`)
 }
 if (/rubric|canvas|submit|\bgrade/i.test(packet)) problems.push('packet contains assignment or grading wording')
 

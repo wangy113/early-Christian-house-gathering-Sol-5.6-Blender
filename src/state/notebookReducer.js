@@ -1,14 +1,17 @@
-// Pure notebook transitions (architecture §7). Timestamps arrive through
-// actions; persistence happens in effects (useNotebook), never here.
+// Pure transitions for exploring, deciding, ruling and sorting. Timestamps
+// arrive through actions; persistence happens in effects (useNotebook).
 
 import { experience } from '../content/experience.js'
 import { encounters } from '../content/encounters.js'
 import {
-  ENTRY_TEXT_FIELDS,
-  MAX_FIELD_LENGTH,
+  SORT_PLACES,
+  VERDICT_IDS,
   freshEnvelope,
   isChoiceFor,
+  isFrameQuestionFor,
+  isHotspotFor,
   isRevisedChoiceFor,
+  isSortStatementFor,
 } from './notebookSchema.js'
 
 const known = (id) => experience.order.includes(id)
@@ -21,68 +24,75 @@ function updateEntry(state, id, patch, now) {
   }
 }
 
-const fits = (value) => typeof value === 'string' && value.length <= MAX_FIELD_LENGTH
+function addOnce(state, id, field, value, now) {
+  const list = state.entries[id][field]
+  if (list.includes(value)) return state
+  return updateEntry(state, id, { [field]: [...list, value] }, now)
+}
 
 export function notebookReducer(state, action) {
+  const { id } = action
   switch (action.type) {
-    case 'VISIT_ENCOUNTER': {
-      if (!known(action.id) || state.entries[action.id].visited) return state
-      return updateEntry(state, action.id, { visited: true }, action.now)
-    }
+    case 'VISIT_ENCOUNTER':
+      if (!known(id) || state.entries[id].visited) return state
+      return updateEntry(state, id, { visited: true }, action.now)
 
-    case 'EDIT_FIELD': {
-      const { id, field, value } = action
-      if (!known(id) || !ENTRY_TEXT_FIELDS.includes(field) || !fits(value)) return state
-      if (state.entries[id][field] === value) return state
-      return updateEntry(state, id, { [field]: value }, action.now)
-    }
+    case 'OPEN_HOTSPOT':
+      if (!known(id) || !isHotspotFor(id, action.hotspotId)) return state
+      return addOnce(state, id, 'hotspotsOpened', action.hotspotId, action.now)
+
+    case 'OPEN_FRAME_QUESTION':
+      if (!known(id) || !isFrameQuestionFor(id, action.frameId)) return state
+      return addOnce(state, id, 'outsideOpened', action.frameId, action.now)
+
+    case 'OPEN_SOURCE':
+      if (!known(id) || !encounters[id].sourceIds.includes(action.sourceId)) return state
+      return addOnce(state, id, 'sourceIdsOpened', action.sourceId, action.now)
 
     case 'CHOOSE': {
-      const { id, choiceId } = action
       if (!known(id)) return state
+      const { choiceId } = action
       const entry = state.entries[id]
-      const captured = encounters[id].kind === 'deep' && entry.firstSnapshot !== null
-      if (captured) {
+      if (encounters[id].kind === 'deep' && entry.firstSnapshot !== null) {
         if (choiceId !== null && !isRevisedChoiceFor(id, choiceId)) return state
+        if (entry.revisedChoiceId === choiceId) return state
         return updateEntry(state, id, { revisedChoiceId: choiceId }, action.now)
       }
       if (choiceId !== null && !isChoiceFor(id, choiceId)) return state
+      if (entry.choiceId === choiceId) return state
       return updateEntry(state, id, { choiceId }, action.now)
     }
 
     case 'REVEAL_PERSPECTIVE': {
-      const { id } = action
       if (!known(id)) return state
       const entry = state.entries[id]
+      const capture = encounters[id].kind === 'deep' && entry.firstSnapshot === null
+      if (entry.perspectivesRevealed && !capture) return state
       const patch = { perspectivesRevealed: true }
-      if (encounters[id].kind === 'deep' && entry.firstSnapshot === null) {
-        patch.firstSnapshot = {
-          observation: entry.observation,
-          assumption: entry.assumption,
-          choiceId: entry.choiceId,
-          reason: entry.reason,
-          capturedAt: action.capturedAt ?? null,
-        }
-      }
-      if (entry.perspectivesRevealed && !patch.firstSnapshot) return state
-      return updateEntry(state, id, patch, action.capturedAt)
+      if (capture) patch.firstSnapshot = { choiceId: entry.choiceId, capturedAt: action.capturedAt ?? null }
+      return updateEntry(state, id, patch, action.capturedAt ?? action.now)
     }
 
-    case 'OPEN_SOURCE': {
-      const { id, sourceId } = action
-      if (!known(id) || !encounters[id].sourceIds.includes(sourceId)) return state
-      const opened = state.entries[id].sourceIdsOpened
-      if (opened.includes(sourceId)) return state
-      return updateEntry(state, id, { sourceIdsOpened: [...opened, sourceId] }, action.now)
+    case 'SET_VERDICT':
+      if (!known(id)) return state
+      if (action.verdictId !== null && !VERDICT_IDS.includes(action.verdictId)) return state
+      if (state.entries[id].verdictId === action.verdictId) return state
+      return updateEntry(state, id, { verdictId: action.verdictId }, action.now)
+
+    case 'REVEAL_VERDICT':
+      if (!known(id) || state.entries[id].verdictRevealed) return state
+      return updateEntry(state, id, { verdictRevealed: true }, action.now)
+
+    case 'SORT_STATEMENT': {
+      if (!known(id) || !isSortStatementFor(id, action.statementId) || !SORT_PLACES.includes(action.place)) return state
+      const sorts = state.entries[id].sorts
+      if (sorts[action.statementId] === action.place) return state
+      return updateEntry(state, id, { sorts: { ...sorts, [action.statementId]: action.place } }, action.now)
     }
 
-    case 'EDIT_OPENING':
-    case 'EDIT_CLOSING': {
-      if (!fits(action.value)) return state
-      const key = action.type === 'EDIT_OPENING' ? 'openingThought' : 'closingThought'
-      if (state[key] === action.value) return state
-      return { ...state, [key]: action.value, updatedAt: action.now ?? state.updatedAt }
-    }
+    case 'REVEAL_SORT':
+      if (!known(id) || state.entries[id].sortRevealed) return state
+      return updateEntry(state, id, { sortRevealed: true }, action.now)
 
     case 'SET_ACCESS_PREFERENCE': {
       const descriptionsOnly = Boolean(action.descriptionsOnly)

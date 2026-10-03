@@ -1,12 +1,10 @@
-// Portable notes and backups (architecture §8). Works from the in-memory
-// state, so pending (unsaved) text is always included.
+// "My reconstruction": the board, the plain-text/Markdown export, and backups.
+// Everything works from in-memory state, so unsaved changes are included.
 
 import { experience } from '../content/experience.js'
-import { encounters } from '../content/encounters.js'
+import { encounters, sortPlaces } from '../content/encounters.js'
 import { sources } from '../content/sources.js'
-import { MAX_IMPORT_BYTES, UNSURE, parseEnvelopeText } from '../state/notebookSchema.js'
-
-const EMPTY = experience.notebook.empty
+import { MAX_IMPORT_BYTES, SORT_PLACES, UNSURE, parseEnvelopeText } from '../state/notebookSchema.js'
 
 export function choiceLabel(encounterId, choiceId) {
   if (choiceId === null || choiceId === undefined) return null
@@ -14,93 +12,88 @@ export function choiceLabel(encounterId, choiceId) {
   return encounters[encounterId].choices.find((choice) => choice.id === choiceId)?.label ?? null
 }
 
-const filled = (value) => typeof value === 'string' && value.trim().length > 0
-
-// Escape learner text so a Markdown preview shows it literally and cannot
-// produce links, emphasis, headings, or raw HTML.
-export function escapeMarkdown(value) {
-  return value
-    .replace(/[\\`*_[\]<>|~&]/g, (char) => (char === '&' ? '&amp;' : `\\${char}`))
-    .split('\n')
-    .map((line) => line.replace(/^(\s*)([#+=-])/, '$1\\$2').replace(/^(\s*\d+)([.)])/, '$1\\$2'))
-    .join('\n')
+export function verdictLabel(encounterId, verdictId) {
+  return encounters[encounterId].verdicts.find((verdict) => verdict.id === verdictId)?.label ?? null
 }
 
-function learnerText(value, markdown) {
-  if (!filled(value)) return markdown ? `_${EMPTY}_` : EMPTY
-  if (!markdown) return value.trim()
-  return escapeMarkdown(value.trim())
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n')
+/**
+ * The learner's sorted statements grouped by where the learner placed them.
+ * Each item notes whether the historian's placement has been revealed and differs.
+ */
+export function buildBoard(state) {
+  const board = Object.fromEntries(SORT_PLACES.map((place) => [place, []]))
+  for (const id of experience.order) {
+    const entry = state.entries[id]
+    for (const statement of encounters[id].sort) {
+      const placed = entry.sorts[statement.id]
+      if (!placed) continue
+      board[placed].push({
+        encounterId: id,
+        number: encounters[id].number,
+        statementId: statement.id,
+        text: statement.text,
+        historian: entry.sortRevealed ? statement.answer : null,
+      })
+    }
+  }
+  return board
 }
 
-function field(label, value, markdown) {
-  return markdown ? `**${label}**\n\n${learnerText(value, true)}\n` : `${label}:\n${learnerText(value, false)}\n`
+/** One encounter's record as display-ready lines (no learner prose exists). */
+export function encounterSummary(state, id) {
+  const item = encounters[id]
+  const entry = state.entries[id]
+  const lines = []
+  lines.push(['Details explored', `${entry.hotspotsOpened.length} of ${item.hotspots.length}`])
+  lines.push(['Outside-the-frame questions opened', `${entry.outsideOpened.length} of ${item.outsideFrame.length}`])
+  if (item.kind === 'deep' && entry.firstSnapshot) {
+    lines.push(['First recommendation', choiceLabel(id, entry.firstSnapshot.choiceId) ?? 'No choice made'])
+    lines.push(['Recommendation now', choiceLabel(id, entry.revisedChoiceId) ?? 'Not revisited'])
+  } else {
+    lines.push([item.kind === 'deep' ? 'Recommendation' : 'Choice', choiceLabel(id, entry.choiceId) ?? 'No choice made'])
+  }
+  lines.push([`Ruling: ${item.caseQuestion}`, verdictLabel(id, entry.verdictId) ?? 'No ruling yet'])
+  return lines
 }
 
-function chosen(label, encounterId, choiceId, markdown) {
-  const text = choiceLabel(encounterId, choiceId) ?? 'No choice selected.'
-  return markdown ? `**${label}:** ${text}\n` : `${label}: ${text}\n`
-}
-
-/** Notes as Markdown (format 'markdown') or plain text (format 'text'). */
-export function notesToText(state, { format = 'markdown', exportedAt = null } = {}) {
+/** The reconstruction as Markdown (format 'markdown') or plain text (format 'text'). */
+export function reconstructionToText(state, { format = 'markdown', exportedAt = null } = {}) {
   const md = format === 'markdown'
   const out = []
-  const heading = (level, text) => out.push(md ? `${'#'.repeat(level)} ${text}\n` : `${text}\n${(level === 1 ? '=' : '-').repeat(text.length)}\n`)
+  const heading = (level, text) =>
+    out.push(md ? `${'#'.repeat(level)} ${text}\n` : `${text}\n${(level === 1 ? '=' : '-').repeat(text.length)}\n`)
+  const bullet = (text) => out.push(`${md ? '-' : '*'} ${text}`)
 
-  heading(1, `${experience.shortTitle} — my notes`)
+  heading(1, `${experience.shortTitle}: my reconstruction`)
   out.push(`${experience.title}\n`)
-  out.push(`Setting: ${experience.setting} The images are modern reconstructions; the situations and dialogue are fictional.\n`)
+  out.push(`Setting: ${experience.setting} The images are modern reconstructions; the situations and voices are fictional.\n`)
   out.push(`Content version: ${experience.contentVersion}${exportedAt ? ` · Exported ${exportedAt}` : ''}\n`)
 
-  if (filled(state.openingThought)) {
-    heading(2, 'Opening thought')
-    out.push(field(experience.openingPrompt, state.openingThought, md))
+  heading(2, 'The gathering as I sorted it')
+  const board = buildBoard(state)
+  for (const place of SORT_PLACES) {
+    heading(3, sortPlaces[place])
+    if (!board[place].length) out.push('Nothing sorted here yet.')
+    for (const item of board[place]) {
+      const note = item.historian && item.historian !== place ? ` (a historian would place this under: ${sortPlaces[item.historian]})` : ''
+      bullet(`${item.number}: ${item.text}${note}`)
+    }
+    out.push('')
   }
 
+  heading(2, 'Picture by picture')
   for (const id of experience.order) {
     const item = encounters[id]
-    const entry = state.entries[id]
-    heading(2, `${item.number}: ${item.title}`)
-    out.push(`Image: ${item.image.originalPath} (modern reconstruction) · ${entry.visited ? 'Visited' : 'Not visited'}\n`)
-
-    if (item.kind === 'deep') {
-      const first = entry.firstSnapshot
-      if (first) {
-        heading(3, 'First response')
-        out.push(field('I can see…', first.observation, md))
-        out.push(field('I am assuming…', first.assumption, md))
-        out.push(chosen('First recommendation', id, first.choiceId, md))
-        out.push(field('My reason', first.reason, md))
-        heading(3, 'My thinking now')
-        out.push(chosen('Current recommendation', id, entry.revisedChoiceId, md))
-        out.push(field('My thinking now', entry.currentThinking, md))
-      } else {
-        out.push(field('I can see…', entry.observation, md))
-        out.push(field('I am assuming…', entry.assumption, md))
-        out.push(chosen('Recommendation', id, entry.choiceId, md))
-        out.push(field('My reason', entry.reason, md))
-        if (filled(entry.currentThinking)) out.push(field('My thinking now', entry.currentThinking, md))
-      }
-    } else {
-      out.push(chosen('Selected', id, entry.choiceId, md))
-      out.push(field('Note', entry.note, md))
-    }
-
-    const refs = item.sourceIds.map((sourceId) => {
-      const source = sources[sourceId]
-      return `${md ? '- ' : '  * '}${sourceId}: ${source.work} ${source.passage} — ${source.url}`
-    })
-    out.push(`${md ? '**Sources for comparison**' : 'Sources for comparison:'}\n\n${refs.join('\n')}\n`)
+    heading(3, `${item.number}: ${item.title}`)
+    out.push(`${state.entries[id].visited ? 'Visited' : 'Not visited'} · Image: ${item.image.originalPath} (modern reconstruction)`)
+    for (const [label, value] of encounterSummary(state, id)) bullet(`${label}: ${value}`)
+    out.push(`Sources for comparison: ${item.sourceIds.map((sourceId) => `${sources[sourceId].work} ${sources[sourceId].passage} <${sources[sourceId].url}>`).join('; ')}`)
+    out.push('')
   }
 
-  if (filled(state.closingThought)) {
-    heading(2, 'Looking back')
-    out.push(field(experience.closing.prompt, state.closingThought, md))
-  }
-
+  heading(2, 'Questions to carry forward')
+  for (const question of experience.closing.questions) bullet(question)
+  out.push('')
   return out.join('\n')
 }
 

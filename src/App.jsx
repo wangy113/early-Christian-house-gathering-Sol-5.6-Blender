@@ -54,8 +54,8 @@ function App() {
   useEffect(() => {
     const page =
       route.name === 'encounter'
-        ? experience.order.indexOf(route.id) + 1 + ' of 6'
-        : { start: 'Start', notebook: 'My notes', closing: 'Look back', 'not-found': 'Not found' }[route.name]
+        ? `Picture ${experience.order.indexOf(route.id) + 1} of 6`
+        : { start: 'Start', notebook: 'My reconstruction', closing: 'Your reconstruction', 'not-found': 'Not found' }[route.name]
     document.title = `${page} · ${experience.shortTitle}`
   }, [route])
 
@@ -77,13 +77,14 @@ function App() {
     <div className={'app-shell'}>
       <a className={'skip-link'} href={'#/start'} onClick={skipTo('main-content')}>Skip to main content</a>
       <header className={'site-header'}>
-        <div className={'site-title'}>
-          <a href={'#/start'}>{experience.shortTitle}</a>
-          <span>{experience.setting}</span>
-        </div>
+        <a className={'brand'} href={'#/start'}>
+          <span className={'brand-mark'} aria-hidden={'true'} />
+          <span className={'brand-name'}>{experience.shortTitle}</span>
+          <span className={'brand-tag'}>Rome · c. AD 160</span>
+        </a>
         <div className={'site-status'}>
           <p className={'progress-text'}>
-            {counts.visitedCount} of {counts.total} encounters visited · notes in {counts.notesCount}
+            {counts.visitedCount} of {counts.total} pictures explored · {counts.sortedCount} sorted
           </p>
           <SaveStatus status={notebook.status} />
           {descriptionsOnly ? <p className={'mode-text'}>Descriptions only</p> : null}

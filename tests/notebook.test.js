@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { notebookReducer } from '../src/state/notebookReducer.js'
-import { MAX_FIELD_LENGTH, freshEnvelope, parseEnvelope, parseEnvelopeText, progress } from '../src/state/notebookSchema.js'
+import { freshEnvelope, parseEnvelope, parseEnvelopeText, progress } from '../src/state/notebookSchema.js'
 import { STORAGE_KEY, loadNotebook, removeNotebook, saveNotebook } from '../src/lib/notebookStorage.js'
-import { backupToJson, escapeMarkdown, notesToText, parseBackup } from '../src/lib/notebookExport.js'
+import { backupToJson, buildBoard, parseBackup, reconstructionToText } from '../src/lib/notebookExport.js'
 
 const run = (actions, state = freshEnvelope()) => actions.reduce(notebookReducer, state)
 
@@ -17,33 +17,36 @@ function memoryStorage(initial = {}) {
   }
 }
 
-test('visiting is idempotent and progress is derived', () => {
+test('visits, hotspots, frame questions and sources are recorded once', () => {
   const state = run([
     { type: 'VISIT_ENCOUNTER', id: 'meal' },
     { type: 'VISIT_ENCOUNTER', id: 'meal' },
+    { type: 'OPEN_HOTSPOT', id: 'meal', hotspotId: 'bread' },
+    { type: 'OPEN_HOTSPOT', id: 'meal', hotspotId: 'bread' },
+    { type: 'OPEN_HOTSPOT', id: 'meal', hotspotId: 'roll' },
+    { type: 'OPEN_FRAME_QUESTION', id: 'meal', frameId: 'late' },
+    { type: 'OPEN_FRAME_QUESTION', id: 'meal', frameId: 'nope' },
+    { type: 'OPEN_SOURCE', id: 'meal', sourceId: 'S2' },
+    { type: 'OPEN_SOURCE', id: 'meal', sourceId: 'S5' },
     { type: 'VISIT_ENCOUNTER', id: 'nope' },
-    { type: 'CHOOSE', id: 'reading', choiceId: 'repeat' },
-    { type: 'OPEN_SOURCE', id: 'reading', sourceId: 'S1' },
   ])
-  assert.deepEqual(progress(state), { visitedCount: 1, notesCount: 0, total: 6 })
-  const noted = run([{ type: 'EDIT_FIELD', id: 'reading', field: 'note', value: '  ' }], state)
-  assert.equal(progress(noted).notesCount, 0, 'whitespace is not a note')
-  const real = run([{ type: 'EDIT_FIELD', id: 'reading', field: 'note', value: 'x' }], state)
-  assert.equal(progress(real).notesCount, 1)
+  const entry = state.entries.meal
+  assert.equal(entry.visited, true)
+  assert.deepEqual(entry.hotspotsOpened, ['bread'])
+  assert.deepEqual(entry.outsideOpened, ['late'])
+  assert.deepEqual(entry.sourceIdsOpened, ['S2'])
+  assert.deepEqual(progress(state), { visitedCount: 1, sortedCount: 0, total: 6 })
 })
 
-test('first snapshot is captured once and never overwritten', () => {
+test('first recommendation is captured once and never overwritten', () => {
   let state = run([
-    { type: 'EDIT_FIELD', id: 'meal', field: 'observation', value: 'bread' },
     { type: 'CHOOSE', id: 'meal', choiceId: 'wait' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'reason', value: 'fairness' },
     { type: 'REVEAL_PERSPECTIVE', id: 'meal', capturedAt: '2026-10-03T18:00:00.000Z' },
   ])
   const snapshot = state.entries.meal.firstSnapshot
-  assert.deepEqual(snapshot, { observation: 'bread', assumption: '', choiceId: 'wait', reason: 'fairness', capturedAt: '2026-10-03T18:00:00.000Z' })
+  assert.deepEqual(snapshot, { choiceId: 'wait', capturedAt: '2026-10-03T18:00:00.000Z' })
   state = run([
     { type: 'CHOOSE', id: 'meal', choiceId: 'reserve' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'currentThinking', value: 'changed' },
     { type: 'REVEAL_PERSPECTIVE', id: 'meal', capturedAt: '2027-01-01T00:00:00.000Z' },
     { type: 'CHOOSE', id: 'meal', choiceId: 'unsure' },
   ], state)
@@ -52,14 +55,12 @@ test('first snapshot is captured once and never overwritten', () => {
   assert.equal(state.entries.meal.revisedChoiceId, 'unsure')
 })
 
-test('a blank reveal records a blank snapshot', () => {
+test('a reveal without a choice records an empty first recommendation', () => {
   const state = run([{ type: 'REVEAL_PERSPECTIVE', id: 'letter', capturedAt: '2026-10-03T18:00:00.000Z' }])
   assert.equal(state.entries.letter.firstSnapshot.choiceId, null)
-  assert.equal(state.entries.letter.firstSnapshot.reason, '')
-  assert.equal(progress(state).notesCount, 0)
 })
 
-test('brief encounters keep a single editable selection, no snapshot', () => {
+test('brief encounters keep a single editable choice', () => {
   const state = run([
     { type: 'CHOOSE', id: 'pressure', choiceId: 'raid' },
     { type: 'REVEAL_PERSPECTIVE', id: 'pressure' },
@@ -69,40 +70,59 @@ test('brief encounters keep a single editable selection, no snapshot', () => {
   assert.equal(state.entries.pressure.choiceId, 'context')
 })
 
-test('reducer rejects unknown fields, choices, sources and oversize text', () => {
-  const start = freshEnvelope()
-  const same = run([
-    { type: 'EDIT_FIELD', id: 'meal', field: 'visited', value: 'x' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'note', value: 'x'.repeat(MAX_FIELD_LENGTH + 1) },
-    { type: 'CHOOSE', id: 'meal', choiceId: 'raid' },
-    { type: 'CHOOSE', id: 'meal', choiceId: 'unsure' },
-    { type: 'OPEN_SOURCE', id: 'meal', sourceId: 'S5' },
-    { type: 'EDIT_OPENING', value: 7 },
-  ], start)
-  assert.equal(same, start)
+test('verdicts and sorting accept only known values and can be changed', () => {
+  let state = run([
+    { type: 'SET_VERDICT', id: 'meal', verdictId: 'partly' },
+    { type: 'SET_VERDICT', id: 'meal', verdictId: 'maybe' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'equal', place: 'picture' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'equal', place: 'nowhere' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'phoebe', place: 'source' },
+  ])
+  assert.equal(state.entries.meal.verdictId, 'partly')
+  assert.deepEqual(state.entries.meal.sorts, { equal: 'picture' })
+  state = run([
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'equal', place: 'unestablished' },
+    { type: 'REVEAL_SORT', id: 'meal' },
+    { type: 'REVEAL_VERDICT', id: 'meal' },
+  ], state)
+  assert.deepEqual(state.entries.meal.sorts, { equal: 'unestablished' })
+  assert.equal(progress(state).sortedCount, 1)
 })
 
-test('storage: empty, loaded, malformed, null, future and other-experience values', () => {
+test('the reconstruction board groups by the learner’s placement and notes the historian’s', () => {
+  const state = run([
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'sharing', place: 'picture' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'equal', place: 'picture' },
+    { type: 'SORT_STATEMENT', id: 'letter', statementId: 'phoebe', place: 'source' },
+    { type: 'REVEAL_SORT', id: 'meal' },
+  ])
+  const board = buildBoard(state)
+  assert.deepEqual(board.picture.map((item) => item.statementId), ['sharing', 'equal'])
+  assert.equal(board.picture[1].historian, 'unestablished')
+  assert.equal(board.source[0].historian, null, 'not revealed for E1 yet')
+  assert.equal(board.unestablished.length, 0)
+})
+
+test('storage: empty, loaded, malformed, null, old v1, future, other-experience values', () => {
   assert.equal(loadNotebook(memoryStorage()).status, 'empty')
   assert.equal(loadNotebook(null).status, 'unavailable')
-  const good = run([{ type: 'EDIT_OPENING', value: 'hello' }])
+  const good = run([{ type: 'VISIT_ENCOUNTER', id: 'meal' }])
   const loaded = loadNotebook(memoryStorage({ [STORAGE_KEY]: JSON.stringify(good) }))
   assert.equal(loaded.status, 'loaded')
-  assert.equal(loaded.state.openingThought, 'hello')
-  for (const raw of ['{not json', 'null', '[]', '42', JSON.stringify({ ...good, schemaVersion: 2 }), JSON.stringify({ ...good, experienceId: 'other' }), JSON.stringify({ ...good, contentVersion: 'threshold-0' })]) {
+  assert.equal(loaded.state.entries.meal.visited, true)
+  const v1 = JSON.stringify({ schemaVersion: 1, experienceId: 'at-the-threshold', contentVersion: 'threshold-1', openingThought: 'kept for recovery' })
+  for (const raw of ['{not json', 'null', '[]', '42', v1, JSON.stringify({ ...good, schemaVersion: 9 }), JSON.stringify({ ...good, experienceId: 'other' }), JSON.stringify({ ...good, contentVersion: 'threshold-0' })]) {
     const result = loadNotebook(memoryStorage({ [STORAGE_KEY]: raw }))
     assert.equal(result.status, 'unreadable', raw)
     assert.equal(result.raw, raw, 'raw value is kept for recovery download')
   }
-  const throwing = { getItem() { throw new Error('denied') } }
-  assert.equal(loadNotebook(throwing).status, 'unavailable')
+  assert.equal(loadNotebook({ getItem() { throw new Error('denied') } }).status, 'unavailable')
 })
 
 test('storage: denied and quota failures are reported, not thrown', () => {
   const quota = { setItem() { const e = new Error('full'); e.name = 'QuotaExceededError'; throw e } }
   assert.deepEqual(saveNotebook(freshEnvelope(), quota), { ok: false, reason: 'full' })
-  const denied = { setItem() { throw new Error('SecurityError') } }
-  assert.deepEqual(saveNotebook(freshEnvelope(), denied), { ok: false, reason: 'denied' })
+  assert.deepEqual(saveNotebook(freshEnvelope(), { setItem() { throw new Error('SecurityError') } }), { ok: false, reason: 'denied' })
   assert.equal(saveNotebook(freshEnvelope(), null).ok, false)
 })
 
@@ -110,70 +130,64 @@ test('storage: reset removes only this experience key', () => {
   const storage = memoryStorage({ [STORAGE_KEY]: '{}', 'house-evidence': '["meal"]', other: 'x' })
   assert.ok(removeNotebook(storage).ok)
   assert.deepEqual([...storage.data.keys()].sort(), ['house-evidence', 'other'])
-  const stuck = { removeItem() { throw new Error('no') }, getItem: () => '{}' }
-  assert.equal(removeNotebook(stuck).ok, false)
+  assert.equal(removeNotebook({ removeItem() { throw new Error('no') }, getItem: () => '{}' }).ok, false)
 })
 
-test('schema rejects wrong types and unknown keys; builds a whitelisted object', () => {
+test('schema rejects wrong types and unknown ids; builds a whitelisted object', () => {
   const base = JSON.parse(JSON.stringify(freshEnvelope()))
-  assert.equal(parseEnvelope({ ...base, openingThought: 5 }).ok, false)
+  const withEntry = (patch) => ({ ...base, entries: { ...base.entries, meal: { ...base.entries.meal, ...patch } } })
+  assert.equal(parseEnvelope(withEntry({ choiceId: 'raid' })).ok, false)
+  assert.equal(parseEnvelope(withEntry({ visited: 'yes' })).ok, false)
+  assert.equal(parseEnvelope(withEntry({ hotspotsOpened: ['roll'] })).ok, false)
+  assert.equal(parseEnvelope(withEntry({ sorts: { equal: 'maybe' } })).ok, false)
+  assert.equal(parseEnvelope(withEntry({ verdictId: 'guilty' })).ok, false)
   assert.equal(parseEnvelope({ ...base, entries: { ...base.entries, extra: {} } }).ok, false)
-  assert.equal(parseEnvelope({ ...base, entries: { ...base.entries, meal: { ...base.entries.meal, choiceId: 'raid' } } }).ok, false)
-  assert.equal(parseEnvelope({ ...base, entries: { ...base.entries, meal: { ...base.entries.meal, visited: 'yes' } } }).ok, false)
-  const result = parseEnvelope({ ...base, injected: '<script>', entries: { ...base.entries, meal: { ...base.entries.meal, extra: 1 } } })
+  const result = parseEnvelope({ ...base, injected: '<script>', entries: { ...base.entries, meal: { ...base.entries.meal, note: 'old text' } } })
   assert.ok(result.ok)
   assert.equal('injected' in result.state, false)
-  assert.equal('extra' in result.state.entries.meal, false)
+  assert.equal('note' in result.state.entries.meal, false)
 })
 
 test('backup JSON roundtrip preserves supported data', () => {
   const state = run([
-    { type: 'EDIT_OPENING', value: 'shared risk' },
     { type: 'VISIT_ENCOUNTER', id: 'meal' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'reason', value: 'first' },
+    { type: 'OPEN_HOTSPOT', id: 'meal', hotspotId: 'table' },
+    { type: 'OPEN_FRAME_QUESTION', id: 'meal', frameId: 'cooked' },
     { type: 'CHOOSE', id: 'meal', choiceId: 'separate' },
     { type: 'REVEAL_PERSPECTIVE', id: 'meal', capturedAt: '2026-10-03T18:00:00.000Z' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'currentThinking', value: 'now' },
+    { type: 'CHOOSE', id: 'meal', choiceId: 'wait' },
+    { type: 'SET_VERDICT', id: 'meal', verdictId: 'unestablished' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'hungry', place: 'source' },
     { type: 'OPEN_SOURCE', id: 'meal', sourceId: 'S2' },
     { type: 'SET_ACCESS_PREFERENCE', descriptionsOnly: true },
-    { type: 'EDIT_CLOSING', value: 'qualify' },
   ])
   const restored = parseBackup(backupToJson(state))
   assert.ok(restored.ok)
   assert.deepEqual(restored.state, state)
 })
 
-test('import rejects oversized, malformed and oversize-field files', () => {
+test('import rejects oversized and malformed files', () => {
   assert.equal(parseBackup('{}', 1024 * 1024 + 1).code, 'too-large')
   assert.equal(parseBackup('nope').ok, false)
-  const big = JSON.parse(JSON.stringify(freshEnvelope()))
-  big.closingThought = 'x'.repeat(MAX_FIELD_LENGTH + 1)
-  const result = parseEnvelopeText(JSON.stringify(big))
-  assert.equal(result.ok, false)
-  assert.match(result.message, /longer than/)
+  assert.equal(parseEnvelopeText(undefined).ok, false)
 })
 
-test('export includes first and current thinking, sources, and escapes learner text', () => {
+test('export contains the board, decisions, rulings and sources, with no scoring language', () => {
   const state = run([
-    { type: 'EDIT_OPENING', value: '# heading [link](http://x) <b>hi</b>' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'reason', value: 'first reason' },
+    { type: 'VISIT_ENCOUNTER', id: 'meal' },
     { type: 'CHOOSE', id: 'meal', choiceId: 'wait' },
     { type: 'REVEAL_PERSPECTIVE', id: 'meal', capturedAt: '2026-10-03T18:00:00.000Z' },
-    { type: 'EDIT_FIELD', id: 'meal', field: 'currentThinking', value: 'pending text' },
+    { type: 'CHOOSE', id: 'meal', choiceId: 'unsure' },
+    { type: 'SET_VERDICT', id: 'meal', verdictId: 'partly' },
+    { type: 'SORT_STATEMENT', id: 'meal', statementId: 'equal', place: 'picture' },
+    { type: 'REVEAL_SORT', id: 'meal' },
   ])
-  const md = notesToText(state)
-  assert.match(md, /First response/)
-  assert.match(md, /> first reason/)
-  assert.match(md, /> pending text/)
-  assert.match(md, /Wait for those who have not arrived\./)
-  assert.match(md, /S2: 1 Corinthians 11:17–34 — https:\/\//)
-  assert.ok(md.includes('\\# heading \\[link\\](http://x) \\<b\\>hi\\</b\\>'))
-  assert.ok(!md.includes('Closing'), 'blank closing thought is omitted')
-  assert.ok(!/rubric|grade|submit|canvas|score/i.test(md))
-  const text = notesToText(state, { format: 'text' })
-  assert.match(text, /No note recorded\./)
-})
-
-test('escapeMarkdown neutralises list and heading starts', () => {
-  assert.equal(escapeMarkdown('- item\n1. two\n## h'), '\\- item\n1\\. two\n\\## h')
+  const md = reconstructionToText(state)
+  assert.match(md, /### In the picture\n\n- E2: Everyone at this gathering was treated as an equal\. \(a historian would place this under: Not established\)/)
+  assert.match(md, /First recommendation: Wait for those who have not arrived\./)
+  assert.match(md, /Recommendation now: Still unsure/)
+  assert.match(md, /Ruling: Was everyone at this table equally welcome\?: Partly supported/)
+  assert.match(md, /1 Corinthians 11:17–34 <https:\/\//)
+  assert.ok(!/rubric|grade|submit|canvas|score|points/i.test(md))
+  assert.match(reconstructionToText(state, { format: 'text' }), /Nothing sorted here yet\./)
 })

@@ -1,17 +1,17 @@
 import { useRef, useState } from 'react'
-import { downloadText, copyText, fileStamp, notesToText } from '../lib/notebookExport.js'
+import { downloadText, copyText, fileStamp, reconstructionToText } from '../lib/notebookExport.js'
 
-/** Copy / download the learner's live notes (including text not yet saved). */
+/** Copy / download the learner's reconstruction (including changes not yet saved). */
 export function ExportActions({ state, compact = false }) {
   const [message, setMessage] = useState('')
   const [fallback, setFallback] = useState(null)
   const fallbackRef = useRef(null)
 
   const copy = async () => {
-    const text = notesToText(state, { format: 'text', exportedAt: new Date().toLocaleString() })
+    const text = reconstructionToText(state, { format: 'text', exportedAt: new Date().toLocaleString() })
     if (await copyText(text)) {
       setFallback(null)
-      setMessage('Notes copied to the clipboard.')
+      setMessage('Your reconstruction was copied to the clipboard.')
     } else {
       setFallback(text)
       setMessage('Copying is not available here. Select the text below and copy it yourself.')
@@ -20,21 +20,21 @@ export function ExportActions({ state, compact = false }) {
   }
 
   const download = () => {
-    const text = notesToText(state, { format: 'markdown', exportedAt: new Date().toLocaleString() })
-    downloadText(`at-the-threshold-notes-${fileStamp()}.md`, text, 'text/markdown;charset=utf-8')
-    setMessage('Notes downloaded as a Markdown text file.')
+    const text = reconstructionToText(state, { format: 'markdown', exportedAt: new Date().toLocaleString() })
+    downloadText(`at-the-threshold-reconstruction-${fileStamp()}.md`, text, 'text/markdown;charset=utf-8')
+    setMessage('Your reconstruction was downloaded as a Markdown text file.')
   }
 
   return (
     <div className={compact ? 'export-actions compact' : 'export-actions'}>
       <div className={'button-row'}>
-        <button type={'button'} onClick={copy}>Copy notes</button>
-        <button type={'button'} onClick={download}>Download notes</button>
+        <button type={'button'} onClick={copy}>Copy my reconstruction</button>
+        <button type={'button'} onClick={download}>Download my reconstruction</button>
       </div>
       <p className={'action-message'} role={'status'}>{message}</p>
       {fallback ? (
         <label className={'field'}>
-          <span>Your notes as plain text</span>
+          <span>Your reconstruction as plain text</span>
           <textarea ref={fallbackRef} readOnly value={fallback} rows={8} />
         </label>
       ) : null}
