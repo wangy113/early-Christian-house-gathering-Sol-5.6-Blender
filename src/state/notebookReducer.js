@@ -100,6 +100,12 @@ export function notebookReducer(state, action) {
       return { ...state, preferences: { ...state.preferences, descriptionsOnly } }
     }
 
+    case 'SET_MARKERS_HIDDEN': {
+      const hideMarkers = Boolean(action.hidden)
+      if (state.preferences.hideMarkers === hideMarkers) return state
+      return { ...state, preferences: { ...state.preferences, hideMarkers } }
+    }
+
     case 'RESTORE_VALIDATED_BACKUP':
       // action.state must already have passed parseEnvelope.
       return action.state

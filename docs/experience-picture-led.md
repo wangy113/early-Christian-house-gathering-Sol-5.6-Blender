@@ -23,6 +23,12 @@ The instructor approved a clickable mock-up of the meal picture before the full 
 | Closing | "Your reconstruction of the gathering" groups every sorted statement into those three columns, lists each ruling and decision, and ends with three questions to carry into class or the instructor's assignment. |
 | Visual style | [Groovy style](https://github.com/chrismccoy/claude-design-styles/blob/master/spec/groovy.md) from `chrismccoy/claude-design-styles`: Righteous and DM Sans, the warm 70s palette, chunky 3 px outlines with hard offset shadows, irregular rounded cards, pill buttons, a rotated sticker, and tinted wavy section bands. |
 
+## Instructor follow-up (same day)
+
+- **Hide the dots.** A "Hide numbered details" button sits under each picture. The choice is saved and applies to all six pictures. When the dots are hidden, the "Details in this picture" list still opens every detail.
+- **Smaller dots.** The visible dot shrank from about 46 px to about 26 px, with a thinner outline and shadow, and the pulsing animation is gone. An invisible margin keeps each dot easy to tap.
+- **Smaller label.** The "Modern reconstruction" label is now smaller and sits at the bottom right of each picture. It never blocks clicks on the image.
+
 ## Deviations from the Groovy spec, kept on purpose
 
 - **Text on buttons.** Filled buttons that carry text use the palette's **rust** (#b7410e) with white text instead of orange. White on the spec's orange (#e8621a) is about 3.2:1, which is too low for body-size text. Orange still fills the markers, step badges and tags, with dark text on top, and colors the large display headings.

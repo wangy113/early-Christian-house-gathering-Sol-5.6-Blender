@@ -35,7 +35,7 @@ export function freshEnvelope(now = null) {
     experienceId: experience.id,
     contentVersion: experience.contentVersion,
     updatedAt: now,
-    preferences: { descriptionsOnly: false },
+    preferences: { descriptionsOnly: false, hideMarkers: false },
     entries: Object.fromEntries(experience.order.map((id) => [id, freshEntry()])),
   }
 }
@@ -143,6 +143,7 @@ export function parseEnvelope(raw) {
     if (raw.preferences !== undefined) {
       if (!raw.preferences || typeof raw.preferences !== 'object') throw new InvalidEnvelope('preferences must be an object')
       state.preferences.descriptionsOnly = bool(raw.preferences.descriptionsOnly, 'preferences.descriptionsOnly')
+      state.preferences.hideMarkers = bool(raw.preferences.hideMarkers, 'preferences.hideMarkers')
     }
     if (raw.entries !== undefined && (typeof raw.entries !== 'object' || raw.entries === null || Array.isArray(raw.entries))) {
       throw new InvalidEnvelope('entries must be an object')

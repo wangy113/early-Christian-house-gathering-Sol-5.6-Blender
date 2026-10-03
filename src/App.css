@@ -759,28 +759,43 @@ button[aria-pressed='true'] {
 
 .pic > .tag {
   position: absolute;
-  left: 0.8rem;
-  top: 0.8rem;
+  right: 0.6rem;
+  bottom: 0.6rem;
   margin: 0;
+  padding: 0 0.45rem;
+  border-width: 1.5px;
+  font-size: 0.68rem;
+  opacity: 0.92;
+  pointer-events: none;
 }
 
 .marker {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 1.65rem;
+  height: 1.65rem;
   min-height: 0;
   padding: 0;
+  border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--orange);
   color: var(--ink);
-  font-size: 1.15rem;
-  box-shadow: 3px 3px 0 var(--ink);
+  font-size: 0.8rem;
+  line-height: 1;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* Keep the hit area at 24px+ without a bigger visible dot. */
+.marker::after {
+  content: '';
+  position: absolute;
+  inset: -0.35rem;
+  border-radius: 50%;
 }
 
 .marker:hover {
-  transform: translate(calc(-50% - 2px), calc(-50% - 2px));
-  box-shadow: 5px 5px 0 var(--ink);
+  transform: translate(calc(-50% - 1px), calc(-50% - 1px));
+  box-shadow: 3px 3px 0 var(--ink);
 }
 
 .marker.is-explored {
@@ -789,20 +804,8 @@ button[aria-pressed='true'] {
 
 .marker[aria-pressed='true'] {
   background: var(--mustard);
-  outline: 3px solid var(--white);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .marker:not(.is-explored) {
-    animation: marker-pulse 2.4s ease-in-out infinite;
-  }
-
-  @keyframes marker-pulse {
-    50% {
-      box-shadow: 3px 3px 0 var(--ink), 0 0 0 8px #e8621a44;
-    }
-  }
+  outline: 2px solid var(--white);
+  outline-offset: 1px;
 }
 
 .frame-question button {

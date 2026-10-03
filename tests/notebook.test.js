@@ -148,6 +148,14 @@ test('schema rejects wrong types and unknown ids; builds a whitelisted object', 
   assert.equal('note' in result.state.entries.meal, false)
 })
 
+test('hiding the numbered details is a saved preference', () => {
+  const state = run([{ type: 'SET_MARKERS_HIDDEN', hidden: true }])
+  assert.equal(state.preferences.hideMarkers, true)
+  assert.equal(run([{ type: 'SET_MARKERS_HIDDEN', hidden: true }], state), state)
+  assert.equal(parseEnvelope(JSON.parse(JSON.stringify(state))).state.preferences.hideMarkers, true)
+  assert.equal(parseEnvelope({ ...JSON.parse(JSON.stringify(state)), preferences: { hideMarkers: 'yes' } }).ok, false)
+})
+
 test('backup JSON roundtrip preserves supported data', () => {
   const state = run([
     { type: 'VISIT_ENCOUNTER', id: 'meal' },
@@ -160,6 +168,7 @@ test('backup JSON roundtrip preserves supported data', () => {
     { type: 'SORT_STATEMENT', id: 'meal', statementId: 'hungry', place: 'source' },
     { type: 'OPEN_SOURCE', id: 'meal', sourceId: 'S2' },
     { type: 'SET_ACCESS_PREFERENCE', descriptionsOnly: true },
+    { type: 'SET_MARKERS_HIDDEN', hidden: true },
   ])
   const restored = parseBackup(backupToJson(state))
   assert.ok(restored.ok)

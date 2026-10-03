@@ -75,6 +75,35 @@ test('hotspots open details, lenses change the voice, and exploration is saved',
   expect((await stored(page)).entries.meal.hotspotsOpened).toEqual(['table', 'elder'])
 })
 
+test('numbered details can be hidden, stay hidden across pictures, and the list still works', async ({ page }) => {
+  await page.goto('./#/encounter/meal')
+  await expect(page.locator('.pic .marker')).toHaveCount(5)
+  const toggle = page.getByRole('button', { name: 'Hide numbered details' })
+  await toggle.click()
+  await expect(page.locator('.pic .marker')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Show numbered details' })).toHaveAttribute('aria-pressed', 'true')
+  await page.locator('.details-list').getByRole('button', { name: /The full table/ }).click()
+  await expect(page.locator('.detail-panel')).toContainText('one goes hungry')
+  await page.goto('./#/encounter/care')
+  await expect(page.locator('.pic .marker')).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.pic .marker')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show numbered details' }).click()
+  await expect(page.locator('.pic .marker')).toHaveCount(5)
+})
+
+test('dots are small and the reconstruction label sits bottom right', async ({ page }) => {
+  await page.goto('./#/encounter/meal')
+  const pic = await page.locator('.pic').boundingBox()
+  const marker = await page.locator('.pic .marker').first().boundingBox()
+  expect(marker.width).toBeLessThanOrEqual(28)
+  expect(marker.width).toBeGreaterThanOrEqual(24)
+  const label = await page.locator('.pic > .tag').boundingBox()
+  expect(label.x + label.width).toBeGreaterThan(pic.x + pic.width * 0.8)
+  expect(label.y + label.height).toBeGreaterThan(pic.y + pic.height * 0.85)
+  await expect(page.locator('.pic > .tag')).toHaveText('Modern reconstruction')
+})
+
 test('outside the frame reveals questions with sourced or unknown answers', async ({ page }) => {
   await page.goto('./#/encounter/meal')
   await page.getByRole('button', { name: 'What’s outside this picture?' }).click()

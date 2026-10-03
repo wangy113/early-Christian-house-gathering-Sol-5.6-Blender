@@ -88,7 +88,7 @@ function FrameQuestion({ entry, opened, onOpen }) {
  * or a failed load): the details list is always present and is the
  * screen-reader path.
  */
-export function HotspotImage({ encounter, entry, descriptionsOnly, onOpenHotspot, onOpenFrame }) {
+export function HotspotImage({ encounter, entry, descriptionsOnly, hideMarkers, onOpenHotspot, onOpenFrame, onToggleMarkers }) {
   const { image } = encounter
   const [lens, setLens] = useState('picture')
   const [activeId, setActiveId] = useState(null)
@@ -118,7 +118,7 @@ export function HotspotImage({ encounter, entry, descriptionsOnly, onOpenHotspot
         onError={() => setFailed(true)}
       />
       <Tag kind={'reconstruction'}>{experience.labels.reconstruction}</Tag>
-      {encounter.hotspots.map((spot, index) => (
+      {hideMarkers ? null : encounter.hotspots.map((spot, index) => (
         <button
           key={spot.id}
           type={'button'}
@@ -185,6 +185,11 @@ export function HotspotImage({ encounter, entry, descriptionsOnly, onOpenHotspot
                 }}
               >
                 {outside ? 'Back to the picture' : 'What’s outside this picture?'}
+              </button>
+            ) : null}
+            {showImage ? (
+              <button type={'button'} aria-pressed={hideMarkers} onClick={onToggleMarkers}>
+                {hideMarkers ? 'Show numbered details' : 'Hide numbered details'}
               </button>
             ) : null}
             {showImage ? (

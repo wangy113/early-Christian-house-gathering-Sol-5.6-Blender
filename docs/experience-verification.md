@@ -56,6 +56,14 @@ The browser journeys run with Google Fonts requests blocked, so they don't depen
   - No-JS visitors get a working packet link.
   - Hosting under the project subpath works with 0 failed responses.
 
+### Follow-up: hide the dots, smaller dots, label at the bottom right
+
+- `npm test`: **22 passed** (adds a test that the hide-dots preference is saved and validated).
+- `npm run test:e2e`: **25 passed**. Two new checks:
+  - Hiding the dots removes all markers. The choice persists across pictures and through a reload, and the details list still works.
+  - A dot measures 24–28 px, and the label sits in the bottom-right corner of the picture.
+- Screenshot of the meal picture with the dots shown and hidden: confirmed visually.
+
 ### Visual checks (screenshots, Chromium, 1366 px)
 
 - The start page and the meal page were inspected with the real Righteous and DM Sans fonts. For screenshots only, the font files were served through curl, because the sandbox's headless browser rejects the proxy certificate for Google Fonts.

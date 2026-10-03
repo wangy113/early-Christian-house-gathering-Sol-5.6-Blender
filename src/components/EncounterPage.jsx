@@ -273,6 +273,8 @@ export function EncounterPage({ id, notebook }) {
           encounter={encounter}
           entry={entry}
           descriptionsOnly={state.preferences.descriptionsOnly}
+          hideMarkers={state.preferences.hideMarkers}
+          onToggleMarkers={() => dispatch({ type: 'SET_MARKERS_HIDDEN', hidden: !state.preferences.hideMarkers })}
           onOpenHotspot={(hotspotId) => dispatch({ type: 'OPEN_HOTSPOT', id, hotspotId })}
           onOpenFrame={(frameId) => dispatch({ type: 'OPEN_FRAME_QUESTION', id, frameId })}
         />
