@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated public assets and test output
+.generated
+test-results
+playwright-report
